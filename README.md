@@ -7,6 +7,8 @@
 
 两样用的是同一个九转引擎（`engine.ts`），改了引擎，两边都会跟着变。
 
+**不熟悉代码？** 先看 [`docs/how-to-ask.md`](docs/how-to-ask.md)：里面列了可以直接对 AI 说的话，以及报告怎么看。
+
 ## 底部判断 skill
 
 `skills/market-bottom-assessment/SKILL.md` 是一份给 AI agent 用的 skill，用来回答「BTC 是否见底」这类问题。判断方法分三层：
@@ -47,6 +49,59 @@ npm run view -- BTCUSDC 4h --at 2026-11-10T08:00:00Z
 # 和改动前的版本对比：图上用颜色标出新增、消失、变化的标记，下面列出差异表和面板逐项对比
 npm run view -- BTCUSDC 4h --compare baseline
 ```
+
+## 一键报告
+
+```bash
+npm run report
+```
+
+改完代码后跑这一条，它会生成 `data/report/index.html`，把当前代码和 `baseline`（线上现行算法）放在一起比。缺少的 K 线会自动下载，第一次运行要多等一会儿。
+
+报告顶部有四行结论，下面是明细：
+
+| 项目 | 内容 |
+|---|---|
+| 测试 | 类型检查和全部单元测试是否通过 |
+| 和 TradingSignal 一致 | `data/ts/` 里每个样本是否逐标记一致，改动前后各算一遍 |
+| 9 和 13 | 按线上方式逐根重放，改动后新增、消失、变化了哪些 9 和 13；最新的几处附对比图链接 |
+| AI 趋势面板 | 每个标的在最新、一天前、三天前三个时刻的卡片和文字，改动前后是否不同 |
+
+回测表里每格的格式是 `改动前 → 改动后（随机 X%，N 次）`：
+- 命中率指信号出现后，价格在若干根 K 线后是否按预期方向走：buy 看涨，sell 看跌。
+- 「随机」是同一段行情里随便挑一根 K 线、按同样方向进场的命中率，用来做参照。
+- 少于 30 次的标「样本不足」，不下结论。
+
+常用参数：
+- `--symbols BTCUSDC,ETHUSDC`、`--intervals 15m,1h,4h`：选标的和周期。默认是 BTCUSDC、ETHUSDC、NVDAUSDT 的 15m、1h、4h。
+- `--bars 5000`：每个标的周期重放多少根 K 线。
+- `--refresh`：重新下载 K 线。
+- `--ref <git ref>`：和别的版本比，默认 `baseline`。
+- `--no-tests`：跳过测试，出得更快。
+
+## 和 TradingSignal 对比
+
+```bash
+npm run compare-ts
+```
+
+做法是把 TradingSignal 自己的 K 线交给我们的引擎计算，再和它的 TD 结果逐个标记比对。输入是同一份 K 线，所以结果只反映算法是否一致，和我们线上用哪家交易所的数据无关。
+
+比对的内容有八类：全部标记事件、9（含是否 perfected）、13、R、形成中的 Setup、进行中的 Countdown、TDST 线、Risk 线。
+
+输出：
+- 每个样本一行结论，例如 `全部标记事件 561/561，9 11/11，13 4/4 …`。
+- 有差异时列出是哪根 K 线、哪一类、谁有谁没有。
+- 每个样本生成一张图 `data/view/ts-<样本名>.html`，差异直接标在 K 线上。
+- 有任何不一致时命令以非 0 退出。加 `--ref baseline` 可以用线上现行算法比，加 `--json` 输出完整结果。
+
+**样本放在哪**：本地的 `data/ts/` 目录。`data/` 已被 gitignore，样本不要提交进仓库。两种放法任选：
+- 一个文件 `data/ts/<名字>.json`，内容是 `{ "symbol", "timeframe", "candles", "result" }`。
+- 两个文件 `data/ts/<名字>-klines.json` 和 `data/ts/<名字>-td9.json`，分别是 TradingSignal 的 TD 序列页面取 K 线和取 td9 结果的两份原始数据，原样保存即可。
+
+`candles` 每根是 `{ t, o, h, l, c }` 或 `[t, h, l, c]`，`t` 是秒。`result` 里要有 `markers`、`setupRuns`、`countdownRuns`、`tdstLines`、`qualified13s`。
+
+样本由维护方提供；你自己有账号的话，也可以导出同样格式的数据放进去。样本越多越好，尽量覆盖不同标的和周期。
 
 ## 时刻参数 `--at`
 
@@ -204,7 +259,7 @@ npm run view -- BTCUSDC 4h --compare baseline
 - `tests/unit/demark/parity.test.ts`、`engine.test.ts`：在两段真实 Binance 行情和 20 个构造用例上，引擎的 sequences 与 events 和一个 Python 参考引擎逐个相同。
 - `summary.test.ts`、`regime.test.ts` 和 `insight-compose-*.json` 样本：周期摘要和跨周期 regime 与同一个 Python 参考实现逐字段相同。
 - `tests/unit/signal-insight/`：文案规则的约束。例如 `trend-only-wording.test.ts` 保证结论里不出现多空、看涨看跌这类词，也不出现指标名。
-- 维护方另外持有两段第三方 TD Sequential 实现的 BTC/USDT 样本（15m、4h）。现行引擎和它逐个标记一致（561/561、563/563）。这两段样本不随仓库公开，改动交回后会在维护方那边再跑一遍。
+- TradingSignal 对照：维护方持有两段 BTC/USDT 样本（15m、4h），现行引擎和它逐个标记一致（561/561、563/563）。样本不随仓库公开，拿到后放进 `data/ts/`，用 `npm run compare-ts` 就能自己验证；改动交回后维护方也会再跑一遍。
 
 ## 怎么交付
 

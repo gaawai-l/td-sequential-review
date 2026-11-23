@@ -15,25 +15,9 @@ import { generateInsight, readInsightLlmConfig } from '../src/services/sync/sign
 import { loadDotEnv } from './env';
 import { CURRENT, Impl, Panel, buildPanel, closedBy, implAt, loadPanelRows, parseAt, signalSymbolOf } from './impl';
 import { downloadKlines, parseArgs, readKlineFile, toLoaded } from './klines-file';
+import { COLOR, DrawLine, DrawMarker, chartPage, escapeHtml } from './page';
 
 type Status = 'same' | 'added' | 'removed' | 'changed';
-
-interface DrawMarker {
-    time: number;
-    position: 'aboveBar' | 'belowBar';
-    color: string;
-    shape: 'arrowUp' | 'arrowDown' | 'circle' | 'square';
-    text: string;
-}
-
-interface DrawLine {
-    from: number;
-    to: number;
-    price: number;
-    color: string;
-    style: 0 | 2;
-    width: 1 | 2;
-}
 
 interface DiffRow {
     status: Exclude<Status, 'same'>;
@@ -41,16 +25,6 @@ interface DiffRow {
     what: string;
 }
 
-const COLOR = {
-    buy: '#089981',
-    sell: '#f23645',
-    progress: '#787b86',
-    countdown: '#b26a00',
-    risk: '#9c27b0',
-    added: '#2962ff',
-    removed: '#ff9800',
-    changed: '#2962ff'
-};
 const STATUS_TEXT: Record<Exclude<Status, 'same'>, string> = { added: '新增', removed: '消失', changed: '变化' };
 
 /** Every field of the marker, so any change (a 9 losing perfection, a deferred count) counts as a difference. */
@@ -147,16 +121,11 @@ function diffChart(now: DemarkChartResponse, before: DemarkChartResponse | null,
             diff.push({ status: 'removed', time: s.line.from * 1000, what: s.what });
         }
     }
-    markers.sort((a, b) => a.time - b.time);
     diff.sort((a, b) => a.time - b.time || a.status.localeCompare(b.status));
     return { markers, lines: lines.filter((l) => l.to > l.from), diff };
 }
 
-function escapeHtml(s: string): string {
-    return s.replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c] as string);
-}
-
-function panelFields(p: Panel): [string, string][] {
+export function panelFields(p: Panel): [string, string][] {
     const { card } = p.snapshot;
     const protection = card.protection
         ? `${card.protection.optionType} · ${card.protection.interval} · ${card.protection.durationSeconds / 3600}h` +
@@ -277,7 +246,6 @@ async function main(): Promise<void> {
             close: Number(r.close)
         };
     });
-    const data = JSON.stringify({ candles, markers, lines }).replace(/</g, '\\u003c');
     const title = `${symbol} ${interval}`;
     const beforeLabel = implBefore?.label ?? '';
     const summary =
@@ -300,41 +268,14 @@ async function main(): Promise<void> {
             ? `<span style="color:${COLOR.buy}">■ buy</span> <span style="color:${COLOR.sell}">■ sell</span> <span style="color:${COLOR.progress}">● S1–S8 形成中的 Setup</span> <span style="color:${COLOR.countdown}">■ C1–C12 / C+ 进行中的 Countdown</span> <span style="color:${COLOR.risk}">— Risk</span> · 虚线 = TDST · 箭头 = perfected 9 / 13`
             : `<span style="color:${COLOR.added}">■ 当前版本新增或有变化</span> <span style="color:${COLOR.removed}">■ 只有 ${escapeHtml(beforeLabel)} 有</span> · 其余为两版相同`;
 
-    const html = `<!doctype html>
-<html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
-<title>${escapeHtml(title)}</title>
-<style>
-body{font:14px/1.5 -apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;margin:16px;color:#131722;background:#fff}
-h1{font-size:18px;margin:0 0 4px}.muted{color:#787b86}#chart{height:560px;margin:8px 0}
-table{border-collapse:collapse;width:100%;margin:8px 0}th,td{border:1px solid #e0e3eb;padding:4px 8px;text-align:left;vertical-align:top}
-th{background:#f8f9fd;white-space:nowrap}tr.changed td{background:#fff8e1}tr.added td{color:${COLOR.added}}tr.removed td{color:${COLOR.removed}}tr.changed-marker td{color:${COLOR.changed}}
-</style></head><body>
-<h1>${escapeHtml(title)}</h1>
-<div class="muted">窗口 ${rows.length} 根已收盘 K 线，${new Date((rows[0] as KlineRow).openTime).toISOString()} .. ${new Date((rows[rows.length - 1] as KlineRow).openTime).toISOString()} · ${summary}</div>
-<div>${legend}</div>
-<div id="chart"></div>
-${diffTable}
-<h2>AI 趋势面板</h2>
-${panelHtml(panelNow, panelBefore, beforeLabel, panelError)}
-${llmHtml}
-<script type="application/json" id="data">${data}</script>
-<script src="https://unpkg.com/lightweight-charts@4.2.0/dist/lightweight-charts.standalone.production.js"></script>
-<script>
-const D = JSON.parse(document.getElementById('data').textContent);
-const el = document.getElementById('chart');
-const chart = LightweightCharts.createChart(el, { autoSize: true, layout: { background: { color: '#ffffff' }, textColor: '#131722' },
-  grid: { vertLines: { color: '#f0f3fa' }, horzLines: { color: '#f0f3fa' } }, timeScale: { timeVisible: true, secondsVisible: false } });
-const candles = chart.addCandlestickSeries({ upColor: '#089981', downColor: '#f23645', borderVisible: false, wickUpColor: '#089981', wickDownColor: '#f23645' });
-candles.setData(D.candles);
-candles.setMarkers(D.markers);
-for (const l of D.lines) {
-  const s = chart.addLineSeries({ color: l.color, lineWidth: l.width, lineStyle: l.style, priceLineVisible: false, lastValueVisible: false, crosshairMarkerVisible: false });
-  s.setData([{ time: l.from, value: l.price }, { time: l.to, value: l.price }]);
-}
-chart.timeScale().fitContent();
-</script>
-</body></html>
-`;
+    const html = chartPage({
+        title,
+        headHtml: `<div class="muted">窗口 ${rows.length} 根已收盘 K 线，${new Date((rows[0] as KlineRow).openTime).toISOString()} .. ${new Date((rows[rows.length - 1] as KlineRow).openTime).toISOString()} · ${summary}</div>\n<div>${legend}</div>`,
+        bodyHtml: `${diffTable}\n<h2>AI 趋势面板</h2>\n${panelHtml(panelNow, panelBefore, beforeLabel, panelError)}\n${llmHtml}`,
+        candles,
+        markers,
+        lines
+    });
     const suffix = `${atMs === null ? '' : `-at-${new Date(atMs).toISOString().replace(/[:.]/g, '')}`}${compareRef === null ? '' : `-vs-${compareRef.replace(/[^A-Za-z0-9._-]/g, '_')}`}`;
     const out = flags.get('out') || path.join('data', 'view', `${symbol}-${interval}${suffix}.html`);
     mkdirSync(path.dirname(out), { recursive: true });
@@ -352,7 +293,9 @@ chart.timeScale().fitContent();
     }
 }
 
-main().catch((error: unknown) => {
-    console.error(error instanceof Error ? error.stack ?? error.message : error);
-    process.exit(1);
-});
+if (require.main === module) {
+    main().catch((error: unknown) => {
+        console.error(error instanceof Error ? error.stack ?? error.message : error);
+        process.exit(1);
+    });
+}

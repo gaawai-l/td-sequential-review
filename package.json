@@ -13,7 +13,9 @@
     "chart": "tsx scripts/chart.ts",
     "backtest": "tsx scripts/backtest.ts",
     "insight": "tsx scripts/insight.ts",
-    "view": "tsx scripts/view.ts"
+    "view": "tsx scripts/view.ts",
+    "compare-ts": "tsx scripts/compare-ts.ts",
+    "report": "tsx scripts/report.ts"
   },
   "devDependencies": {
     "@types/jest": "^29.5.8",

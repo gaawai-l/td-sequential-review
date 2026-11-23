@@ -5,6 +5,9 @@ import { execFileSync } from 'child_process';
 import { existsSync, mkdirSync } from 'fs';
 import path from 'path';
 import { INTERVAL_MS, KlineRow } from '../src/services/manager/demark/binance-klines';
+import * as chart from '../src/services/manager/demark/chart';
+import * as engine from '../src/services/manager/demark/engine';
+import * as fixedDecimal from '../src/services/manager/demark/fixed-decimal';
 import * as service from '../src/services/manager/demark/demark-service';
 import * as summary from '../src/services/manager/demark/summary';
 import { INSIGHT_INTERVALS, InsightInterval, InsightSnapshot } from '../src/services/manager/types/insight-types';
@@ -17,6 +20,9 @@ import { downloadKlines, readKlineFile, toLoaded } from './klines-file';
 export interface Impl {
     label: string;
     buildChart: typeof service.buildChart;
+    evaluateSequential: typeof engine.evaluateSequential;
+    scaleRows: typeof fixedDecimal.scaleRows;
+    projectChart: typeof chart.projectChart;
     analyzeWindow: typeof summary.analyzeWindow;
     assembleSnapshot: typeof snapshot.assembleSnapshot;
     templateSections: typeof template.templateSections;
@@ -26,6 +32,9 @@ export interface Impl {
 export const CURRENT: Impl = {
     label: 'working tree',
     buildChart: service.buildChart,
+    evaluateSequential: engine.evaluateSequential,
+    scaleRows: fixedDecimal.scaleRows,
+    projectChart: chart.projectChart,
     analyzeWindow: summary.analyzeWindow,
     assembleSnapshot: snapshot.assembleSnapshot,
     templateSections: template.templateSections,
@@ -45,6 +54,9 @@ export function implAt(ref: string): Impl {
     return {
         label: `${ref} (${sha.slice(0, 8)})`,
         buildChart: load('services/manager/demark/demark-service').buildChart,
+        evaluateSequential: load('services/manager/demark/engine').evaluateSequential,
+        scaleRows: load('services/manager/demark/fixed-decimal').scaleRows,
+        projectChart: load('services/manager/demark/chart').projectChart,
         analyzeWindow: load('services/manager/demark/summary').analyzeWindow,
         assembleSnapshot: load('services/sync/signal-insight/snapshot').assembleSnapshot,
         templateSections: load('services/sync/signal-insight/insight-template').templateSections,

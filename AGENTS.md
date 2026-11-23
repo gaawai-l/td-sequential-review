@@ -7,6 +7,18 @@
 
 背景、接口字段、面板的生成流程和已知口径都在 `README.md` 里，动手前先读一遍。
 
+## 和用户沟通
+
+使用这个仓库的人可能不懂编程，也不熟悉 AI 工具。默认按下面的方式配合：
+
+- 用中文、用大白话回答。先说结果，再说原因。不要贴大段代码、JSON 或命令输出。
+- 命令都由你来运行，不要让用户自己敲命令。需要联网或权限时，直接说明需要用户点一下允许。
+- 生成了页面（`view`、`report`、`compare-ts`）就直接用系统命令打开它，并告诉用户看页面的哪一部分。
+- 用户说的时间按他说的时区理解，换算成 UTC 后再传给 `--at`，并把换算结果说出来让他确认。
+- 每次改动行为后都运行 `npm run report`，把顶部四行结论原样转述给用户，再打开报告。有红色项时先处理，不要交付。
+- git、fork、PR、打补丁这些操作全部代办，只在需要用户登录或授权时才请他操作。
+- 用户常说的话和对应做法见 `docs/how-to-ask.md`。
+
 ## 环境
 
 - **需要联网。**
@@ -36,6 +48,8 @@
   - `--compare REF`：与某个 git 版本逐项对比。
   - `--llm`：额外调用 LLM，给当前版本生成线上那样的结论，需要 `.env`。
   - 给用户看结果时，生成这个页面并告诉对方路径；能打开浏览器的话直接打开。
+- `npm run report [--symbols A,B] [--intervals 15m,1h,4h] [--bars 5000] [--ref REF] [--refresh] [--no-tests]`：一键报告，生成 `data/report/index.html`。把当前代码和 REF（默认 `baseline`）放在一起比：测试、TradingSignal 一致性、9/13 的变化、回测前后、AI 趋势面板前后。缺的 K 线会自动下载。
+- `npm run compare-ts [--ref REF] [--json]`：用 `data/ts/` 里的 TradingSignal 样本逐标记比对，有不一致时以非 0 退出。样本格式见 README「和 TradingSignal 对比」。`data/ts/` 为空时这一项无法检查，要如实告诉用户，不要说成通过。
 - `--ref REF` / `--compare REF`：用 git 版本 REF 的 `src/` 计算，而不是当前工作区。`baseline` tag 是线上现行算法，所以「改动前」的输出随时都能用 `--ref baseline` 补跑，不必先 stash。
 
 ## 代码边界
@@ -76,6 +90,7 @@
 - 原有测试的期望值只有两种情况可以改：确认原值错了，或者属于第 4 类、规则本身变了。改了要在 commit message 里说明原因。
   - `parity.test.ts`、`summary.test.ts`、`regime.test.ts` 的期望值来自 Python 参考实现，改它们要格外说明。
   - `__snapshots__` 只能在确认新输出正确后才更新。
+- 每次改动行为后先跑 `npm run report`。和 TradingSignal 出现不一致时，逐条写明是哪根 K 线、为什么，并写进 `reports/<日期>-<主题>/README.md`。
 - 每次改动行为后，在 `reports/<日期>-<主题>/` 下存前后对比，「改动前」用 `--ref baseline` 跑：
   - 改了 9/13：`backtest --json`，全量和 `--window 500` 各一份，存成 `backtest-<标的>-<周期>-<full|w500>.before.json` 和 `.after.json`。
   - 改了面板：挑几个有代表性的时刻跑 `insight --at T --json`，存成 `insight-<标的>-<时刻>.before.json` 和 `.after.json`。
