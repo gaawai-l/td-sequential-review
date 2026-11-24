@@ -211,3 +211,10 @@ Use `过去一个小时` for the latest available complete hour and relative ela
 Use the user’s mental model when explaining the result. A 9 is like releasing the accelerator as the current move begins to lose force. A 13 is like pressing the brake as the move has decayed further and a reversal becomes possible. The higher timeframe tells whether the move is happening on an uphill path, a downhill path, or during a change of slope. The metaphor explains signal timing and context. It does not replace the on-chain or price confirmation checks.
 
 在中文回答中可直接表达为：9 类似“松开油门”，13 类似“踩刹车”。上一级周期说明当前是在上坡、下坡，还是坡度正在改变。
+
+## Historical snapshot validation
+
+For a historical assessment, use the requested time as the cutoff. Read the saved `insight.json`, technical indicators, and on-chain observations for that case. Use only data that was available at the cutoff. Report unavailable inputs as `未取得`.
+
+In `snapshot.timeframes[]`, `summary.lastSignal.at` is the signal bar's opening time in UTC milliseconds. Add the timeframe duration to get its confirmation close, then measure signal age from that close. Check that both the signal close and `summary.asOf` are at or before the cutoff.
+
